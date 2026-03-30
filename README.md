@@ -1,0 +1,3 @@
+# Transformers
+
+Here I put the code I wrote, copied, cloned, stole or used in any other way to get to know transformers, LLMs, ChatGPT, VLM, RAG and so on...
