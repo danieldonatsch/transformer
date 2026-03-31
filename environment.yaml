@@ -1,0 +1,13 @@
+name: transformer
+channels:
+  - defaults
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.12
+  - lightning
+  - matplotlib
+  - numpy
+  - pytorch
+  - torchvision
+  - tqdm
