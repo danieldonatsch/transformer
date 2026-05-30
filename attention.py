@@ -5,24 +5,29 @@ import torch.nn.functional as F
 
 class Attention(nn.Module):
 
-    def __init__(self, d_model=2):
-        ## d_model = the number of embedding values per token.
-        ##           In the transformer I used in the StatQuest: Transformer Neural Networks Clearly Explained!!!
-        ##           d_model=2, so that's what we'll use as a default for now.
-        ##           However, in "Attention Is All You Need" d_model=512
+    def __init__(self, d_embedding=2, d_key=2):
+        """Initializes the attention block
 
+        Computes the attention and then the vector in which the embedding should be moved.
+
+
+        :param d_embedding: (int) dimension of the embedding vector
+        :param d_key: (int) dimension of the key-query-space ("Attention Is All You Need" uses 512)
+        """
         super().__init__()
 
-        self.d_model = d_model
+        self.d_embedding=d_embedding
+        self.d_key=d_key
 
-        ## Initialize the Weights (W) that we'll use to create the
-        ## query (q), key (k) and value (v) numbers for each token
-        ## NOTE: Most implementations that I looked at include the bias terms
-        ##       but I didn't use them in my video (since they are not in the
-        ##       original Attention is All You Need paper).
-        self.W_q = nn.Linear(in_features=d_model, out_features=d_model, bias=False)
-        self.W_k = nn.Linear(in_features=d_model, out_features=d_model, bias=False)
-        self.W_v = nn.Linear(in_features=d_model, out_features=d_model, bias=False)
+        # Initialize the Weights (W) that we'll use to create the
+        # query (q), key (k) and value (v) numbers for each token.
+        # The W_v is in a down and up matrix split to save some parameters.
+        # We also use no bias, since that's the way it is described in 3blue1brown
+        # and implemented bs StatQuest.
+        self.W_q = nn.Linear(in_features=d_embedding, out_features=d_key, bias=False)
+        self.W_k = nn.Linear(in_features=d_embedding, out_features=d_key, bias=False)
+        self.W_vd = nn.Linear(in_features=d_embedding, out_features=d_key, bias=False)
+        self.W_vu = nn.Linear(in_features=d_key, out_features=d_embedding, bias=False)
 
         ## NOTE: In this simple example, we are not training on the data in "batches"
         ##       However, by defining variables for row_dim and col_dim, we could
@@ -41,7 +46,7 @@ class Attention(nn.Module):
         ##       come from the same source.
         q = self.W_q(encodings_for_q)
         k = self.W_k(encodings_for_k)
-        v = self.W_v(encodings_for_v)
+        v = self.W_vu(self.W_vd(encodings_for_v))
 
         ## Compute attention scores
         ## the equation is (q * k^T)/sqrt(d_model)
