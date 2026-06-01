@@ -1,15 +1,15 @@
 import torch
 import torch.nn as nn
 from torch.optim import Adam
-import lightning as L
 
 from position_encoding import PositionEncoding
 from transformer import Transformer
 
 
-class MiniLanguageModel(L.LightningModule):
+class MiniLanguageModel(nn.Module):
 
-    def __init__(self, num_tokens=4, d_embedding=2, d_key_query_space=2, max_len=6):
+    def __init__(self, num_tokens=4, d_embedding=2, d_key_query_space=2, max_len=6,
+                 device=torch.device('cpu')):
         """Initializes our MiniLanguageModel, so en MLM (instead of an LLM)
 
         :param num_tokens: (int) The total number of tokens that exist
@@ -20,6 +20,7 @@ class MiniLanguageModel(L.LightningModule):
         super().__init__()
 
         self.debug_mode = False
+        self.device = device
         self.max_len = max_len
 
         ## NOTE: In this simple example, we are just using a "single layer" decoder.
@@ -28,18 +29,19 @@ class MiniLanguageModel(L.LightningModule):
         ##       the next module.
 
         self.we = nn.Embedding(num_embeddings=num_tokens,
-                               embedding_dim=d_embedding)
+                               embedding_dim=d_embedding).to(self.device)
 
         self.pe = PositionEncoding(d_model=d_embedding,
-                                   max_len=max_len)
+                                   max_len=max_len).to(self.device)
 
         self.transformer = Transformer(d_embedding=d_embedding,
                                        d_key_query_space=d_key_query_space,
                                        device=self.device)
 
-        self.fc_layer = nn.Linear(in_features=d_embedding, out_features=num_tokens)
+        self.fc_layer = nn.Linear(in_features=d_embedding, out_features=num_tokens).to(self.device)
 
         self.loss = nn.CrossEntropyLoss()
+        self.to(self.device)
 
 
 
@@ -52,11 +54,15 @@ class MiniLanguageModel(L.LightningModule):
             print("position encoding:", position_encoded.size())
 
         transformed_values = self.transformer(position_encoded)
-        print("self_attention_values.size():", transformed_values.size())
+        if self.debug_mode:
+            print("self_attention_values.size():", transformed_values.size())
 
 
         fc_layer_output = self.fc_layer(transformed_values)
-        print("fc_layer_output.size():", fc_layer_output.size())
+
+        if self.debug_mode:
+            print("fc_layer_output.size():", fc_layer_output.size())
+
         return fc_layer_output
 
     def configure_optimizers(self):

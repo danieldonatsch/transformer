@@ -12,6 +12,8 @@ except ImportError:
   pip.main(['install', "lightning"])
 
 import torch
+import torch.nn as nn
+import torch.optim as optim
 import lightning as L ## Lightning makes it easier to write, optimize and scale our code
 
 from decoder_only_transformer import DecoderOnlyTransformer
@@ -19,16 +21,32 @@ from mini_language_model import MiniLanguageModel
 from data_loader import id_to_token, token_to_id, get_dataloader
 
 
+def get_device(args) -> torch.device:
+    """Checks if user requested GPU or CPU training and if GPUs are available. Also deals with processors architecture.
+
+    :param args: args from ArgumentParser
+    :return: torch.device
+    """
+    if args.no_gpu:
+        return torch.device("cpu")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    print("GPU-training not possible")
+    return torch.device("cpu")
+
 
 class Experiment:
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, device=torch.device("cpu"), debug_mode=False):
 
         self.model = model
+        self.debug_mode = debug_mode
+        self.device = device
 
-
-        if self.model is None:
-            self.model = DecoderOnlyTransformer(num_tokens=len(token_to_id), d_model=2, max_len=6)
+        if self.debug_mode:
+            print("Device:", self.device)
 
     def run_model(self, debug_mode=False,
                   test_phrase="llms can generate , summarize , translate and parse text in many contexts"):
@@ -39,6 +57,7 @@ class Experiment:
         n = min(self.model.max_len, len(test_phrase_tokens)-1)
         ## Now create the input for the transformer...
         model_input = torch.tensor([token_to_id[t] for t in test_phrase_tokens[:n]])
+        model_input = model_input.to(self.device)
 
         print("Test phrase:", test_phrase)
         print("Input:", " ".join([t for t in test_phrase_tokens[:n]]))
@@ -64,12 +83,11 @@ class Experiment:
         ## Now use a loop to predict output tokens until we get an
         ## <EOS> token.
         max_length = len(test_phrase_tokens) + 1
-        print(max_length, input_length)
         for i in range(input_length, max_length):
             if (predicted_id == token_to_id["."]):  # if the prediction is <EOS>, then we are done
                 break
 
-            model_input = torch.cat((model_input, predicted_id))
+            model_input = torch.cat((model_input, predicted_id.to(self.device)))
             if model_input.size(0) > self.model.max_len:
                 model_input = model_input[1:]
 
@@ -82,14 +100,38 @@ class Experiment:
         #for id in predicted_ids:
         #    print("\t", id_to_token[id.item()])
 
-    def train_model(self, debug_mode=False):
+    def train_epoch(self, train_loader, optimizer, epoch):
 
-        self.model.debug_mode = debug_mode
-        dataloader = get_dataloader(n_token=self.model.max_len, debug_mode=debug_mode)
+        loss_function = nn.CrossEntropyLoss()
+        self.model.train()
 
-        trainer = L.Trainer(max_epochs=30)
-        trainer.fit(self.model, train_dataloaders=dataloader)
+        for batch_idx, (data, target) in enumerate(train_loader):
+            data, target = data.to(self.device), target.to(self.device)
+            optimizer.zero_grad()
+            output = self.model(data)
 
+            loss = loss_function(output.squeeze(), target.squeeze())
+            loss.backward()
+            optimizer.step()
+            if batch_idx % args.log_interval == 0:
+                print('Train Epoch: {:2d} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                    epoch, batch_idx * len(data), len(train_loader.dataset),
+                           100. * batch_idx / len(train_loader), loss.item()))
+                if args.dry_run:
+                    break
+
+
+    def train_model(self, epochs=10, lr=0.1, debug_mode=False):
+
+        optimizer = optim.Adadelta(self.model.parameters(), lr=lr)
+        #scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+
+        train_loader = get_dataloader(n_token=self.model.max_len, debug_mode=True)
+
+        for epoch in range(1, epochs + 1):
+            self.train_epoch(train_loader, optimizer, epoch)
+            #self.run_model()
+            #scheduler.step()
 
 
 
@@ -99,10 +141,13 @@ if __name__ == '__main__':
     script_start_time = time.time()
 
     class UserArgs():
-        debug_mode = True
-        do_training = False
+        debug_mode = False
+        do_training = True
         # The maximum number of (input) tokens
         max_num_tokens = 6
+        no_gpu = False
+        log_interval = 1_000
+        dry_run = False
 
     args = UserArgs()
 
@@ -113,7 +158,10 @@ if __name__ == '__main__':
         #model=DecoderOnlyTransformer(num_tokens=len(token_to_id), d_embedding=128,
         #                             d_key=64, max_len=args.max_num_tokens)
         model = MiniLanguageModel(num_tokens=len(token_to_id), d_embedding=128,
-                                  d_key_query_space=64, max_len=args.max_num_tokens)
+                                  d_key_query_space=64, max_len=args.max_num_tokens,
+                                  device=get_device(args)),
+        device=get_device(args),
+        debug_mode=args.debug_mode
     )
     print("Run untrained model")
     experiment.run_model(debug_mode=args.debug_mode)

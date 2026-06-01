@@ -8,13 +8,13 @@ from multilayer_perceptron import MultilayerPerceptron
 
 class Transformer(nn.Module):
 
-    def __init__(self, d_embedding: int, d_key_query_space: int, device):
+    def __init__(self, d_embedding: int, d_key_query_space: int, device=torch.device('cpu')):
         super().__init__()
         self.device = device
 
-        self.self_attention = Attention(d_embedding=d_embedding, d_key=d_key_query_space)
+        self.self_attention = Attention(d_embedding=d_embedding, d_key=d_key_query_space).to(self.device)
         # Add an MLP Layer
-        self.multilayer_perceptron = MultilayerPerceptron(d_embedding=d_embedding)
+        self.multilayer_perceptron = MultilayerPerceptron(d_embedding=d_embedding).to(self.device)
 
     def forward(self, embeddings):
 

@@ -32,8 +32,8 @@ class Attention(nn.Module):
         ## NOTE: In this simple example, we are not training on the data in "batches"
         ##       However, by defining variables for row_dim and col_dim, we could
         ##       allow for batches by setting row_dim to 1 and col_com to 2.
-        self.row_dim = 0
-        self.col_dim = 1
+        self.row_dim = -2 #0
+        self.col_dim = -1 #1
 
     def forward(self, encodings_for_q, encodings_for_k, encodings_for_v, mask=None):
         ## Create the query, key and values using the encodings
