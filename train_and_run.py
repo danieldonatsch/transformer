@@ -2,6 +2,7 @@
 Original Source:
 https://github.com/StatQuest/decoder_transformer_from_scratch/blob/main/decoder_transformers_with_pytorch_and_lightning_v2.ipynb
 """
+import os
 import time
 
 ## First, check to see if lightning is installed, if not, install it.
@@ -51,6 +52,7 @@ class Experiment:
     def run_model(self, debug_mode=False,
                   test_phrase="llms can generate , summarize , translate and parse text in many contexts"):
         print("run_model() called")
+        self.model.eval()
         self.model.debug_mode = debug_mode
 
         test_phrase_tokens = test_phrase.split(' ')
@@ -100,6 +102,24 @@ class Experiment:
         #for id in predicted_ids:
         #    print("\t", id_to_token[id.item()])
 
+    def train_model(self, epochs=10, lr=0.1, save_path: str = None, debug_mode=False):
+
+        if save_path:
+            os.makedirs(save_path, exist_ok=True)
+
+        optimizer = optim.Adadelta(self.model.parameters(), lr=lr)
+        #scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+
+        train_loader = get_dataloader(n_token=self.model.max_len, debug_mode=self.debug_mode)
+
+        for epoch in range(1, epochs + 1):
+            self.train_epoch(train_loader, optimizer, epoch)
+            #self.run_model()
+            #scheduler.step()
+            if save_path:
+                torch.save(self.model.state_dict(),
+                           os.path.join(save_path, f"{self.model.__class__.__name__}_epoch={epoch:02d}.pt"))
+
     def train_epoch(self, train_loader, optimizer, epoch):
 
         loss_function = nn.CrossEntropyLoss()
@@ -121,57 +141,51 @@ class Experiment:
                     break
 
 
-    def train_model(self, epochs=10, lr=0.1, debug_mode=False):
+def main(args):
 
-        optimizer = optim.Adadelta(self.model.parameters(), lr=lr)
-        #scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    experiment = Experiment(
+        # model=DecoderOnlyTransformer(num_tokens=len(token_to_id), d_embedding=128,
+        #                             d_key=64, max_len=args.max_num_tokens)
+        model=MiniLanguageModel(num_tokens=len(token_to_id), d_embedding=128,
+                                d_key_query_space=64, max_len=args.max_num_tokens,
+                                device=get_device(args)),
+        device=get_device(args),
+        debug_mode=args.debug_mode
+    )
+    if args.load_weights:
+        experiment.model.load_state_dict(torch.load(args.load_weights))
+        print("Model Weights loaded from", args.load_weights)
 
-        train_loader = get_dataloader(n_token=self.model.max_len, debug_mode=True)
+    print("Run untrained model")
+    experiment.run_model(debug_mode=args.debug_mode)
 
-        for epoch in range(1, epochs + 1):
-            self.train_epoch(train_loader, optimizer, epoch)
-            #self.run_model()
-            #scheduler.step()
+    if args.do_training:
+        print("Train model")
+        experiment.train_model(debug_mode=args.debug_mode, epochs=args.epochs, save_path=args.save_path)
+        print("Run trained model")
 
-
-
+        test_phrase = "llms can generate , summarize , translate and parse text in many contexts , and are a foundational technology behind modern chatbots"
+        experiment.run_model(debug_mode=args.debug_mode, test_phrase=test_phrase)
 
 
 if __name__ == '__main__':
     script_start_time = time.time()
 
     class UserArgs():
-        debug_mode = False
-        do_training = True
         # The maximum number of (input) tokens
         max_num_tokens = 6
+        load_weights = 'model_weights/MiniLanguageModel_epoch=01.pt'
+        debug_mode = False
+        # Training parameters
+        do_training = True
+        epochs = 1
         no_gpu = False
         log_interval = 1_000
         dry_run = False
+        save_path = 'model_weights'
 
     args = UserArgs()
-
-    ## We set the seed so that we get each time the same result.
-    L.seed_everything(seed=42)
-
-    experiment = Experiment(
-        #model=DecoderOnlyTransformer(num_tokens=len(token_to_id), d_embedding=128,
-        #                             d_key=64, max_len=args.max_num_tokens)
-        model = MiniLanguageModel(num_tokens=len(token_to_id), d_embedding=128,
-                                  d_key_query_space=64, max_len=args.max_num_tokens,
-                                  device=get_device(args)),
-        device=get_device(args),
-        debug_mode=args.debug_mode
-    )
-    print("Run untrained model")
-    experiment.run_model(debug_mode=args.debug_mode)
-    if args.do_training:
-        print("Train model")
-        experiment.train_model(debug_mode=args.debug_mode)
-        print("Run trained model")
-
-        test_phrase = "llms can generate , summarize , translate and parse text in many contexts , and are a foundational technology behind modern chatbots"
-        experiment.run_model(debug_mode=args.debug_mode, test_phrase=test_phrase)
+    main(args)
 
     print("Script finished after", time.time() - script_start_time, "seconds")
 
