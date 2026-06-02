@@ -29,7 +29,8 @@ class Transformer(nn.Module):
 
     def forward(self, embeddings):
 
-        mask = torch.tril(torch.ones((embeddings.size(dim=0), embeddings.size(dim=0)), device=self.device))
+        n_tokens = embeddings.size(dim=-2)
+        mask = torch.tril(torch.ones((n_tokens, n_tokens), device=self.device))
         mask = mask == 0
 
         for i in range(len(self.attention_blocks)):
