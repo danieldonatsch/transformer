@@ -9,13 +9,16 @@ from transformer import Transformer
 class MiniLanguageModel(nn.Module):
 
     def __init__(self, num_tokens=4, d_embedding=2, d_key_query_space=2, max_len=6,
-                 device=torch.device('cpu')):
+                 num_layers=2, num_attention_heads=2, device=torch.device('cpu')):
         """Initializes our MiniLanguageModel, so en MLM (instead of an LLM)
 
         :param num_tokens: (int) The total number of tokens that exist
         :param d_embedding: (int) The size/dimension of the embedding
         :param d_key_query_space: (int) The dimension of the key-query-space in the attention block
         :param max_len: (int) The maximum length (i.e. num tokens) we allow as input
+        :param num_layers: (int) The number of layers. One Layer is an attention block and an MLP block (Default: 2)
+        :param num_attention_heads: (int) The number of attention heads in the transformer (Default: 2)
+        :param device: torch.device (Default: 'cpu')
         """
         super().__init__()
 
@@ -31,6 +34,8 @@ class MiniLanguageModel(nn.Module):
 
         self.transformer = Transformer(d_embedding=d_embedding,
                                        d_key_query_space=d_key_query_space,
+                                       num_layers=num_layers,
+                                       num_attention_heads=num_attention_heads,
                                        device=self.device)
 
         self.fc_layer = nn.Linear(in_features=d_embedding, out_features=num_tokens).to(self.device)
