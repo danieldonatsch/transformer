@@ -2,7 +2,6 @@ import os
 import pickle
 import torch
 
-from pprint import pprint
 from torch.utils.data import TensorDataset, DataLoader
 
 
@@ -19,9 +18,12 @@ with open(os.path.join(data_dir, token_file), 'rb') as of:
     id_to_token = dict(map(reversed, token_to_id.items()))
 
 
-def get_dataloader(n_token, debug_mode=False):
+def get_dataloader(n_token, min_n_tokens=-1, batch_size=1, debug_mode=False):
     inputs = []
     labels = []
+
+    if min_n_tokens < 1 or min_n_tokens > n_token:
+        min_n_tokens = n_token
 
     with open(os.path.join(data_dir, text_file), 'r') as of:
         while line := of.readline():
@@ -35,6 +37,10 @@ def get_dataloader(n_token, debug_mode=False):
                     labels.append([token_to_id[t] for t in tokens[i+1:i+n_token+1]])
                     #print("Inputs:", [t for t in tokens[i:i+n_token]])
                     #print("Labels:", [t for t in tokens[i+1:i+n_token+1]])
+            elif n > min_n_tokens:
+                padded_tokens = ['.'] * (n_token - n + 1) + tokens
+                inputs.append([token_to_id[t] for t in padded_tokens[:-1]])
+                labels.append([token_to_id[t] for t in padded_tokens[1:]])
             elif debug_mode:
                 print("Not enough tokens in\n", tokens)
 
@@ -42,18 +48,10 @@ def get_dataloader(n_token, debug_mode=False):
     label_tensor = torch.tensor(labels)
 
     print("Number of tokens:", len(token_to_id))
-    print("Training set size:", input_tensor.size())
+    print("Size training set:", input_tensor.size())
 
     #print("Input Dim:", input_tensor.size())
     #print("Labels Dim:", label_tensor.size())
     ## Now let's package everything up into a DataLoader...
     dataset = TensorDataset(input_tensor, label_tensor)
-    return DataLoader(dataset)
-
-
-
-
-
-
-# for testing
-#get_dataloader(5)
+    return DataLoader(dataset, batch_size=batch_size)
