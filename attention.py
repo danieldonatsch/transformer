@@ -10,7 +10,6 @@ class Attention(nn.Module):
 
         Computes the attention and then the vector in which the embedding should be moved.
 
-
         :param d_embedding: (int) dimension of the embedding vector
         :param d_key: (int) dimension of the key-query-space ("Attention Is All You Need" uses 512)
         """

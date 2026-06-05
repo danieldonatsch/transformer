@@ -32,13 +32,14 @@ class MiniLanguageModel(nn.Module):
         self.pe = PositionEncoding(d_embedding=d_embedding,
                                    max_len=max_len).to(self.device)
 
-        self.transformer = Transformer(d_embedding=d_embedding,
-                                       d_key_query_space=d_key_query_space,
-                                       num_layers=num_layers,
-                                       num_attention_heads=num_attention_heads,
-                                       device=self.device)
+        # Create the transformers
+        self.transformers = [
+            Transformer(d_embedding=d_embedding, d_key_query_space=d_key_query_space,
+                        num_attention_heads=num_attention_heads, device=self.device)
+            for _ in range(num_layers)
+        ]
 
-        self.fc_layer = nn.Linear(in_features=d_embedding, out_features=num_tokens).to(self.device)
+        self.un_embedding = nn.Linear(in_features=d_embedding, out_features=num_tokens).to(self.device)
 
         self.to(self.device)
 
@@ -50,15 +51,16 @@ class MiniLanguageModel(nn.Module):
             print("word embeddings:", word_embeddings.size())
             print("position encoding:", position_encoded.size())
 
-        transformed_values = self.transformer(position_encoded)
+        transformed_values = position_encoded
+        for transformer in self.transformers:
+            transformed_values = transformer(transformed_values)
+
         if self.debug_mode:
             print("self_attention_values.size():", transformed_values.size())
 
-
-        fc_layer_output = self.fc_layer(transformed_values)
+        word_prob = self.un_embedding(transformed_values)
 
         if self.debug_mode:
-            print("fc_layer_output.size():", fc_layer_output.size())
+            print("word_prob.size():", word_prob.size())
 
-        return fc_layer_output
-
+        return word_prob
