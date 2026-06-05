@@ -95,7 +95,7 @@ class Experiment:
             os.makedirs(save_path, exist_ok=True)
 
         optimizer = optim.Adadelta(self.model.parameters(), lr=lr)
-        #scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
         train_loader = get_dataloader(n_token=self.model.max_len,
                                       min_n_tokens=self.model.max_len,
@@ -104,13 +104,15 @@ class Experiment:
 
         for epoch in range(1, epochs + 1):
             t0 = time.time()
+            print("Train with learning rate", scheduler.get_last_lr())
             self.train_epoch(train_loader, optimizer, epoch)
             t1 = time.time()
             print(f"Training of epoch {epoch:2d} took {t1-t0:.1f} seconds")
             cor, mx = self.test_model(save_path, epoch)
             t2 = time.time()
             print(f"Test of epoch {epoch:2d} took {t2-t1:.1f} seconds. We had {cor}/{mx} correct predictions")
-            #scheduler.step()
+            scheduler.step()
+
             if save_path:
                 torch.save(self.model.state_dict(),
                            os.path.join(save_path, f"{self.model.__class__.__name__}_epoch={epoch:02d}.pt"))
@@ -230,7 +232,8 @@ def main(args):
 
     if args.do_training:
         print("\n*** Train model")
-        experiment.train_model(debug_mode=args.debug_mode, epochs=args.epochs, save_path=args.save_path)
+        experiment.train_model(debug_mode=args.debug_mode, lr=args.learning_rate,
+                               epochs=args.epochs, save_path=args.save_path)
 
         print("\n*** Run trained model")
         test_phrase = "llms can generate , summarize , translate and parse text in many contexts , and are a foundational technology behind modern chatbots"
@@ -249,8 +252,11 @@ if __name__ == '__main__':
         debug_mode = False
         # Training parameters
         do_training = True
-        epochs = 10
-        batch_size = 20
+        epochs = 100
+        batch_size = 100
+        learning_rate = 10.0
+        lr_gamma = 0.1
+        lr_step = 20
         no_gpu = False
         log_interval = 1_000
         dry_run = False

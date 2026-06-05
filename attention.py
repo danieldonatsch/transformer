@@ -42,7 +42,7 @@ class Attention(nn.Module):
         ## NOTE: For Encoder-Decoder Attention, the encodings for q come from
         ##       the decoder and the encodings for k and v come from the output
         ##       from the encoder.
-        ##       In all of the other types of attention, the encodings all
+        ##       In all the other types of attention, the encodings all
         ##       come from the same source.
         q = self.W_q(encodings_for_q)
         k = self.W_k(encodings_for_k)
