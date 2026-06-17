@@ -98,7 +98,7 @@ class Experiment:
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
         train_loader = get_dataloader(n_token=self.model.max_len,
-                                      min_n_tokens=self.model.max_len,
+                                      min_n_tokens=min(6, self.model.max_len),
                                       batch_size=args.batch_size,
                                       debug_mode=self.debug_mode)
 
