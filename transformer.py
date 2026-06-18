@@ -19,6 +19,9 @@ class Transformer(nn.Module):
         super().__init__()
         self.device = device
 
+        self.layer_norm1 = nn.LayerNorm(d_embedding).to(self.device)
+        self.layer_norm2 = nn.LayerNorm(d_embedding).to(self.device)
+
         # Create Attention Blocks
         self.attention_blocks = [
             Attention(d_embedding=d_embedding, d_key=d_key_query_space).to(self.device)
@@ -39,7 +42,11 @@ class Transformer(nn.Module):
             self_attention_values += attention_block(embeddings, embeddings, embeddings, mask)
         # Update the embeddings with the self attention values
         embeddings = embeddings + (self_attention_values / len(self.attention_blocks))
+        # Apply layer norm
+        embeddings = self.layer_norm1(embeddings)
         # Apply the MLP
         embeddings = self.multilayer_perceptron(embeddings)
+        # Apply layer norm
+        embeddings = self.layer_norm2(embeddings)
 
         return embeddings
