@@ -54,4 +54,4 @@ def get_dataloader(n_token, min_n_tokens=-1, batch_size=1, debug_mode=False):
     #print("Labels Dim:", label_tensor.size())
     ## Now let's package everything up into a DataLoader...
     dataset = TensorDataset(input_tensor, label_tensor)
-    return DataLoader(dataset, batch_size=batch_size)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
