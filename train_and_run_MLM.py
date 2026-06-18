@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.utils.tensorboard import SummaryWriter
+
 from mini_language_model import MiniLanguageModel
 from data_loader import id_to_token, token_to_id, get_dataloader
 
@@ -32,6 +34,8 @@ class Experiment:
         self.model = model
         self.debug_mode = debug_mode
         self.device = device
+        self.tensorboard = None
+        self.loss_function = nn.CrossEntropyLoss()
 
         if self.debug_mode:
             print("Device:", self.device)
@@ -93,6 +97,7 @@ class Experiment:
 
         if save_path:
             os.makedirs(save_path, exist_ok=True)
+            self.tensorboard = SummaryWriter(save_path)
 
         optimizer = optim.Adadelta(self.model.parameters(), lr=lr)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
@@ -119,7 +124,6 @@ class Experiment:
 
     def train_epoch(self, train_loader, optimizer, epoch):
 
-        loss_function = nn.CrossEntropyLoss()
         self.model.train()
 
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -132,15 +136,17 @@ class Experiment:
             output = torch.flatten(output, start_dim=0, end_dim=1)
             target = torch.flatten(target, start_dim=0, end_dim=1)
 
-            loss = loss_function(output.squeeze(), target.squeeze())
+            loss = self.loss_function(output.squeeze(), target.squeeze())
             loss.backward()
             optimizer.step()
             if batch_idx % args.log_interval == 0:
                 print('  Train Epoch: {:2d} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader), loss.item()))
-                if args.dry_run:
-                    break
+            if not (self.tensorboard is None):
+                self.tensorboard.add_scalar('Training Loss', loss.item(), ((epoch-1) * len(train_loader)) + batch_idx)
+            if args.dry_run:
+                break
 
     def test_model(self, save_path: str = None, epoch=0):
 
@@ -155,6 +161,8 @@ class Experiment:
         correct_predictions = 0
         max_possible = 0
 
+        tot_loss = 0
+        n_loss_vals = 0
         for test_phrase in test_phrases:
             test_phrase_tokens = test_phrase.split(' ')
             n = min(self.model.max_len, len(test_phrase_tokens) - 1)
@@ -162,16 +170,23 @@ class Experiment:
             model_input = torch.tensor([token_to_id[t] for t in test_phrase_tokens[:n]])
             model_input = model_input.to(self.device)
             exp_output = torch.tensor([token_to_id[t] for t in test_phrase_tokens[n:]])
+            exp_output = exp_output.to(self.device)
             max_possible += len(exp_output)
 
-            # Now get predictions from the model
-            predictions = self.model(model_input)
-            predicted_id = torch.tensor([torch.argmax(predictions[-1, :])])
-            predicted_ids = predicted_id
-
+            predicted_ids = torch.empty((0), dtype=torch.float32)
 
             # Now use a loop to predict output tokens until we get an  <EOS> token.
             for i in range(len(exp_output)):
+                # Let the model make a prediction
+                predictions = self.model(model_input)
+                predicted_id = torch.tensor([torch.argmax(predictions[-1, :])]).to(self.device)
+                predicted_ids = torch.cat((predicted_ids, predicted_id))
+
+                # Compute the loss
+                loss = self.loss_function(predictions[-1, :], exp_output[i])
+                tot_loss += loss.item()
+                n_loss_vals += 1
+
                 # Check if we predicted correctly:
                 if predicted_id == exp_output[i]:
                     correct_predictions += 1
@@ -183,13 +198,10 @@ class Experiment:
 
                 # So far, all predictions where correct and we're not at the end of the sentence.
                 # Do a new prediction
-                model_input = torch.cat((model_input, predicted_id.to(self.device)))
+                model_input = torch.cat((model_input, predicted_id))
                 if model_input.size(0) > self.model.max_len:
                     model_input = model_input[1:]
 
-                predictions = self.model(model_input)
-                predicted_id = torch.tensor([torch.argmax(predictions[-1, :])])
-                predicted_ids = torch.cat((predicted_ids, predicted_id))
 
             # Save results
             if save_path:
@@ -201,17 +213,33 @@ class Experiment:
                     of.write(f"Expected Tokens:  '{' '.join([id_to_token[id.item()] for id in exp_output])}'\n\n")
                     of.write(f"Correct predicted words {correct_predictions:}/{max_possible}\n\n")
 
+        if not (self.tensorboard is None):
+            self.tensorboard.add_scalar('Test Loss', tot_loss/n_loss_vals, (epoch - 1))
+            self.tensorboard.add_scalar('Test Correct Preds', correct_predictions, (epoch - 1))
+
         return correct_predictions, max_possible
 
 
 
 def main(args):
 
+    arg_file = None
+    if args.save_path:
+        os.makedirs(args.save_path, exist_ok=True)
+        arg_file = open(os.path.join(args.save_path, 'parameters.txt'), 'w')
+
     print("Arguments:")
     for arg in dir(args):
         if arg.startswith('_'):
             continue
-        print(f"- {arg}: {args.__getattribute__(arg)}")
+        line = f"- {arg}: {args.__getattribute__(arg)}"
+        print(line)
+        if arg_file:
+            arg_file.write(line + "\n")
+
+    if arg_file:
+        arg_file.close()
+        arg_file = None
 
     experiment = Experiment(
         # model=DecoderOnlyTransformer(num_tokens=len(token_to_id), d_embedding=128,
