@@ -41,7 +41,7 @@ class Transformer(nn.Module):
         for attention_block in self.attention_blocks:
             self_attention_values += attention_block(embeddings, embeddings, embeddings, mask)
         # Update the embeddings with the self attention values
-        embeddings = embeddings + (self_attention_values / len(self.attention_blocks))
+        embeddings = embeddings + self_attention_values
         # Apply layer norm
         embeddings = self.layer_norm1(embeddings)
         # Apply the MLP
