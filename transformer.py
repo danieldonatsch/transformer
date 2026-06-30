@@ -45,7 +45,7 @@ class Transformer(nn.Module):
         # Apply layer norm
         embeddings = self.layer_norm1(embeddings)
         # Apply the MLP
-        embeddings = self.multilayer_perceptron(embeddings)
+        embeddings = embeddings + self.multilayer_perceptron(embeddings)
         # Apply layer norm
         embeddings = self.layer_norm2(embeddings)
 

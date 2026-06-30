@@ -30,5 +30,5 @@ class MultilayerPerceptron(nn.Module):
         x = F.relu(x)
         x = self.W_dwn(x)
 
-        return embedding + x
+        return x
 
