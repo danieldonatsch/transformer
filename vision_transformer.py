@@ -13,7 +13,7 @@ from vit_block import ViTBlock
 class VisionTransformer(nn.Module):
     def __init__(self, num_img_chan: int, img_size: int, embedding_dim: int, patch_size: int,
                  num_transformer_blocks: int = 1, num_attention_heads: int = 1, mlp_factor: int = 1,
-                 num_out_features: int = 10):
+                 input_dropout_rate: float = 0, num_out_features: int = 10):
         """Initializes a vision transformer
 
         :param num_img_chan: (int) Number of image channels (1 for greyscale, 3 for RGN)
@@ -23,12 +23,16 @@ class VisionTransformer(nn.Module):
                 layer norm, attention, layer norm, mlp. (Default: 1)
         :param num_attention_heads: (int) Number of (parallel) attention heads (Default: 1)
         :param mlp_factor: (int) Factor by which the MLP should increase (and again decrease) (Default: 1).
+        :param input_dropout_rate: (float) Drop-out rate after input-embedding (Default: 0)
         :param num_out_features: (int) Number of output features (Default: 10, since we use MNIST to test it).
         """
         super().__init__()
         self.patch_embedding = PatchEmbedding(num_img_chan, embedding_dim, patch_size)
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.pos_embed = nn.Parameter(torch.randn(1, (img_size // patch_size) ** 2 + 1, embedding_dim))
+        # Optional dropout (helps regularization)
+        self.dropout = nn.Dropout(p=input_dropout_rate)
+
         self.transformer_layers = nn.Sequential(*[ViTBlock(embedding_dim, num_attention_heads, mlp_factor)
                                                   for _ in range(num_transformer_blocks)])
 

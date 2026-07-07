@@ -4,6 +4,7 @@ We use MNIST as experiment, since we have already a CNN implemented which does M
 https://github.com/danieldonatsch/MNIST_GAN
 """
 import datetime
+import matplotlib.pyplot as plt
 import os
 import time
 import torch
@@ -25,7 +26,8 @@ class Experiment:
         self.device = get_device(training_params)
         self.tensorboard = None
         self.parameters = training_params
-        self.loss_function = nn.CrossEntropyLoss() # F.nll_loss()
+        self.loss_function = nn.CrossEntropyLoss()
+        self.log_file_path = None
 
         self.train_loader = None
         self.test_loader = None
@@ -40,6 +42,7 @@ class Experiment:
                                            num_transformer_blocks=self.parameters.num_layers,
                                            num_attention_heads=self.parameters.attention_heads,
                                            mlp_factor=self.parameters.mlp_factors,
+                                           input_dropout_rate=self.parameters.drop_out_rate,
                                            num_out_features=10 # MNIST
                                           )
 
@@ -49,19 +52,19 @@ class Experiment:
         :return:
         """
 
-        train_kwargs = {'batch_size': self.parameters.batch_size}
+        train_kwargs = {'batch_size': self.parameters.batch_size, 'shuffle': True}
         test_kwargs = {'batch_size': self.parameters.batch_size}
 
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
         ])
-        dataset1 = datasets.MNIST('../data', train=True, download=True, transform=transform)
-        dataset2 = datasets.MNIST('../data', train=False, transform=transform)
-        self.train_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)
-        self.test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
-        print("Training data:", len(dataset1), "samples split into", len(self.train_loader), "batches")
-        print("Test data:", len(dataset1), "samples split into", len(self.test_loader), "batches")
+        dataset_train = datasets.MNIST('../data', train=True, download=True, transform=transform)
+        dataset_test = datasets.MNIST('../data', train=False, transform=transform)
+        self.train_loader = torch.utils.data.DataLoader(dataset_train, **train_kwargs)
+        self.test_loader = torch.utils.data.DataLoader(dataset_test, **test_kwargs)
+        self.print("Training data:", len(dataset_train), "samples split into", len(self.train_loader), "batches")
+        self.print("Test data:", len(dataset_test), "samples split into", len(self.test_loader), "batches")
 
     def run_vit(self):
         pass
@@ -74,7 +77,8 @@ class Experiment:
         if self.parameters.save_path:
             os.makedirs(self.parameters.save_path, exist_ok=True)
             self.tensorboard = SummaryWriter(self.parameters.save_path)
-            self.parameters.save_parameters()
+            self.parameters.save_parameters('log.txt')
+            self.log_file_path = os.path.join(self.parameters.save_path, 'log.txt')
 
         self.model.train()
         self.model.to(self.device)
@@ -86,18 +90,18 @@ class Experiment:
         for epoch in range(1, self.parameters.epochs + 1):
 
             t0 = time.time()
-            print("Train with learning rate", scheduler.get_last_lr())
+            self.print("\nTrain with learning rate", scheduler.get_last_lr())
 
             train_loss = self.train_one_epoch(optimizer, epoch)
 
             t1 = time.time()
-            print(f"Training of epoch {epoch:2d}:\n- time in sec: {t1-t0:.1f}\n- Loss per sample: {train_loss}")
+            self.print(f"Training of epoch {epoch:2d}:\n- time in sec: {t1-t0:.1f}\n- Loss per sample: {train_loss}")
 
             test_loss, test_acc = self.test_vit(epoch)
 
             t2 = time.time()
-            print(f"Test after epoch {epoch:2d}:", f"- time in sec: {t2-t1:.1f}",
-                  f"- Loss per sample: {test_loss}", f"- Accuracy: {test_acc}", sep='\n')
+            self.print(f"Test after epoch {epoch:2d}:", f"- time in sec: {t2-t1:.1f}",
+                       f"- Loss per sample: {test_loss}", f"- Accuracy: {test_acc}", sep='\n')
 
             scheduler.step()
 
@@ -134,6 +138,15 @@ class Experiment:
                     self.tensorboard.add_scalar('Test Loss', loss.item() / batch_size, it_num)
                     self.tensorboard.add_scalar('Test Accuracy', correct / batch_size, it_num)
 
+        rand_samples = [sample_no for sample_no in range(0, batch_size, batch_size//16)]
+        plt.figure(figsize=(32, 18))
+        for i, sample_ind in enumerate(rand_samples[:16]):
+            idx = sample_ind
+            plt.subplot(4, 4, i + 1)
+            plt.title(f"Prediction: {pred[idx].item()}, Target {target[idx].item()}")
+            plt.imshow(data[idx, 0, :, :].cpu(), cmap='gray', vmin=0.0, vmax=1.0) #vmin=-0.4242, vmax=2.8215)
+        plt.savefig(os.path.join(self.parameters.save_path, f'test_samples_epoch={epoch:02d}.png'))
+
         return total_loss / num_samples, tot_correct / num_samples
 
     def train_one_epoch(self, optimizer, epoch):
@@ -164,16 +177,28 @@ class Experiment:
 
         return total_loss / num_samples
 
+    def print(self, *args, sep=' '):
+        message = sep.join([str(arg) for arg in args])
+        if self.log_file_path:
+            with open(self.log_file_path, 'a') as of:
+                of.write(message + "\n")
+        print(message)
+
 
 if __name__ == '__main__':
     script_start_time = time.time()
 
     params = Parameters(result_dir='res_vit')
-    params.embedding_dim = 16
+    params.embedding_dim = 64
     params.patch_size = 7
-    params.mlp_factors = 1
+    params.attention_heads = 8
+    params.num_layers = 8
+    params.mlp_factors = 2
     params.learning_rate = 0.01
     params.debug_mode = True
+    params.lr_gamma = 0.1
+    params.lr_step = 10
+    params.drop_out_rate = 0.3
 
     exp = Experiment(training_params=params)
 

@@ -25,13 +25,14 @@ class Parameters:
 
         self.save_path = os.path.join(self.result_dir, self.experiment_name)
 
-    def save_parameters(self) -> None:
+    def save_parameters(self, file_name=None) -> None:
         """Saves the parameters to a file and writes it to the terminal.
         """
         arg_file = None
         if self.save_path:
             os.makedirs(self.save_path, exist_ok=True)
-            arg_file = open(os.path.join(self.save_path, 'parameters.txt'), 'w')
+            file_name = file_name if file_name else 'parameters.txt'
+            arg_file = open(os.path.join(self.save_path, file_name), 'a+')
 
         print("Arguments:")
         for arg in dir(self):
