@@ -9,22 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from mini_language_model import MiniLanguageModel
 from data_loader import id_to_token, token_to_id, get_dataloader
-
-
-def get_device(args) -> torch.device:
-    """Checks if user requested GPU or CPU training and if GPUs are available. Also deals with processors architecture.
-
-    :param args: args from ArgumentParser
-    :return: torch.device
-    """
-    if args.no_gpu:
-        return torch.device("cpu")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    print("GPU-training not possible")
-    return torch.device("cpu")
+from utilities import get_device
 
 
 class Experiment:
@@ -273,17 +258,17 @@ if __name__ == '__main__':
 
     class UserArgs():
         # The maximum number of (input) tokens
-        max_num_tokens = 6
-        num_layers = 4
-        attention_heads = 4
+        max_num_tokens = 12
+        num_layers = 16
+        attention_heads = 16
         load_weights = None #'model_weights/MiniLanguageModel_epoch=01.pt'
         debug_mode = False
         # Training parameters
         do_training = True
         epochs = 100
         batch_size = 100
-        learning_rate = 10.0
-        lr_gamma = 0.1
+        learning_rate = 1.0
+        lr_gamma = 0.5
         lr_step = 20
         no_gpu = False
         log_interval = 1_000
